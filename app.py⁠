@@ -1,0 +1,98 @@
+import streamlit as st
+import time
+from google import genai
+from google.genai import types
+
+st.set_page_config(page_title="Veo Video Studio - Music Studio Kh", page_icon="🎬", layout="centered")
+
+st.title("🎬 បង្កើតវីដេអូ Veo (TikTok & YouTube)")
+st.caption("Music Studio Kh | បង្កើតវីដេអូ AI ដោយគ្មានដែនកំណត់ 50 credits")
+
+default_key = st.secrets.get("GEMINI_API_KEY", "") if "GEMINI_API_KEY" in st.secrets else ""
+api_key = st.text_input("🔑 បញ្ចូល Gemini API Key របស់អ្នក៖", value=default_key, type="password")
+
+aspect_choice = st.radio(
+    "📐 ជ្រើសរើសទម្រង់វីដេអូ៖",
+    options=["9:16", "16:9"],
+    format_func=lambda x: {
+        "9:16": "📱 ទម្រង់ TikTok / Reels (បញ្ឈរ 9:16)",
+        "16:9": "📺 ទម្រង់ YouTube (ផ្តេក 16:9)"
+    }.get(x, x),
+    horizontal=True
+)
+
+model_choice = st.selectbox(
+    "⚙️ ជ្រើសរើសម៉ូដែល Veo៖",
+    options=[
+        "veo-3.0-fast-generate-001",
+        "veo-3.0-generate-001",
+        "veo-2.0-generate-001"
+    ],
+    format_func=lambda x: {
+        "veo-3.0-fast-generate-001": "Veo 3 Fast (លឿន & សន្សំសំចៃបំផុត)",
+        "veo-3.0-generate-001": "Veo 3 Standard (ច្បាស់ស្អាតខ្លាំង)",
+        "veo-2.0-generate-001": "Veo 2 Standard"
+    }.get(x, x)
+)
+
+uploaded_image = st.file_uploader("🖼️ បញ្ចូលរូបភាពដើម (ស្រេចចិត្ត - បើចង់ឱ្យរូបមានចលនា)", type=["jpg", "jpeg", "png"])
+if uploaded_image:
+    st.image(uploaded_image, caption="រូបភាពដើមដែលបានជ្រើសរើស", use_container_width=True)
+
+prompt = st.text_area(
+    "✍️ សរសេរពាក្យបញ្ជា (Prompt ជាភាសាអង់គ្លេស)៖",
+    placeholder="ឧទាហរណ៍៖ A young Cambodian woman smiling gently in a lush green coconut orchard during golden hour sunset, cinematic lighting...",
+    height=120
+)
+
+platform_label = "TikTok (9:16)" if aspect_choice == "9:16" else "YouTube (16:9)"
+if st.button(f"🚀 បង្កើតវីដេអូទម្រង់ {platform_label}", type="primary", use_container_width=True):
+    if not api_key:
+        st.error("❌ សូមបញ្ចូល Gemini API Key របស់អ្នកជាមុនសិន!")
+    elif not prompt.strip():
+        st.error("❌ សូមសរសេរពាក្យបញ្ជា (Prompt) ជាមុនសិន!")
+    else:
+        try:
+            client = genai.Client(api_key=api_key)
+            with st.status(f"⏳ កំពុងបង្កើតវីដេអូទម្រង់ {platform_label} (ប្រហែល ១ ទៅ ២ នាទី)...", expanded=True) as status:
+                video_config = types.GenerateVideosConfig(
+                    aspect_ratio=aspect_choice,
+                    person_generation="allow_adult"
+                )
+                if uploaded_image is not None:
+                    img_bytes = uploaded_image.getvalue()
+                    image_input = types.Image(image_bytes=img_bytes, mime_type=uploaded_image.type)
+                    operation = client.models.generate_videos(
+                        model=model_choice, prompt=prompt, image=image_input, config=video_config
+                    )
+                else:
+                    operation = client.models.generate_videos(
+                        model=model_choice, prompt=prompt, config=video_config
+                    )
+
+                while not operation.done:
+                    st.write("🔄 AI កំពុងគូរចលនាវីដេអូ សូមរង់ចាំបន្តិច...")
+                    time.sleep(10)
+                    operation = client.operations.get(operation)
+
+                if operation.response and operation.response.generated_videos:
+                    generated_video = operation.response.generated_videos[0]
+                    client.files.download(file=generated_video.video)
+                    ratio_tag = "9x16" if aspect_choice == "9:16" else "16x9"
+                    output_filename = f"veo_{ratio_tag}_output.mp4"
+                    generated_video.video.save(output_filename)
+                    status.update(label=f"✅ បង្កើតវីដេអូទម្រង់ {platform_label} បានជោគជ័យ!", state="complete", expanded=False)
+                    st.video(output_filename)
+                    with open(output_filename, "rb") as file:
+                        st.download_button(
+                            label=f"📥 ទាញយកវីដេអូ {platform_label} ទុកក្នុង iPhone",
+                            data=file,
+                            file_name=f"veo_{ratio_tag}_{int(time.time())}.mp4",
+                            mime="video/mp4",
+                            use_container_width=True
+                        )
+                else:
+                    status.update(label="⚠️ មិនអាចបង្កើតវីដេអូបានទេ", state="error")
+                    st.warning("ប្រព័ន្ធមិនបានបញ្ជូនវីដេអូមកវិញទេ។ សូមសាកល្បងកែពាក្យបញ្ជាម្តងទៀត។")
+        except Exception as e:
+            st.error(f"មានបញ្ហាបច្ចេកទេសកើតឡើង៖ {str(e)}")
