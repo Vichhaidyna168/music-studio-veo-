@@ -1,3 +1,6 @@
+streamlit
+protobuf
+google-genai==1.10.0
 
 
 
