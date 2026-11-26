@@ -4,7 +4,7 @@ from google import genai
 from google.genai import types
 
 st.set_page_config(page_title="VCY Veo Video Generator", layout="centered")
-st.title("🎬 បង្កើតវីដេអូ AI (9:16)")
+st.title("🎬 បង្កើត AI (9:16)")
 
 api_key = st.text_input("បញ្ចូល Gemini API Key របស់អ្នក៖", type="password")
 prompt = st.text_area("សរសេរការពិពណ៌នាវីដេអូ (Prompt ជាភាសាអង់គ្លេស)៖", height=120)
